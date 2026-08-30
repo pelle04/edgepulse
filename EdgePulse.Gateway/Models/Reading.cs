@@ -1,10 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
 namespace EdgePulse.Gateway.Models
 {
-    internal class Reading
-    {
-    }
+    internal record Reading(
+        string DeviceId,
+        string MetricName,
+        double Value,
+        string Unit,
+        DateTimeOffset TimestampUtc);
 }
