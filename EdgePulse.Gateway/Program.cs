@@ -1,6 +1,7 @@
 using EdgePulse.Gateway;
 using EdgePulse.Gateway.Adapters;
 using EdgePulse.Gateway.Buffering;
+using EdgePulse.Gateway.Forwarding;
 using EdgePulse.Gateway.Models;
 using System.Threading.Channels;
 
@@ -9,6 +10,7 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.Services.Configure<ModbusAdapterOptions>(builder.Configuration.GetSection("ModbusAdapter"));
 builder.Services.Configure<MqttAdapterOptions>(builder.Configuration.GetSection("MqttAdapter"));
 builder.Services.Configure<BufferWriterOptions>(builder.Configuration.GetSection("BufferWriter"));
+builder.Services.Configure<IotHubForwarder.IotHubForwarderOptions>(builder.Configuration.GetSection("IotHubForwarder"));
 
 // Bounded so a stalled downstream consumer applies backpressure to the
 // adapters instead of letting memory grow unbounded.
@@ -24,6 +26,7 @@ builder.Services.AddSingleton<IDeviceAdapter, MqttAdapter>();
 
 builder.Services.AddSingleton<ReadingRepository>();
 builder.Services.AddSingleton<BufferWriter>();
+builder.Services.AddSingleton<IotHubForwarder>();
 
 builder.Services.AddHostedService<Worker>();
 
