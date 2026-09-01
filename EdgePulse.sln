@@ -7,7 +7,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{5733EFB4-DDB
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EdgePulse.Simulator", "src\EdgePulse.Simulator\EdgePulse.Simulator.csproj", "{0FFAED48-3AF4-4A92-B733-597994D63801}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EdgePulse.Gateway", "EdgePulse.Gateway\EdgePulse.Gateway.csproj", "{59C85D7D-957F-49E8-B60C-B402945EDB94}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EdgePulse.Gateway", "src\EdgePulse.Gateway\EdgePulse.Gateway.csproj", "{59C85D7D-957F-49E8-B60C-B402945EDB94}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -10,10 +10,10 @@ WORKDIR /app
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["EdgePulse.Gateway/EdgePulse.Gateway.csproj", "EdgePulse.Gateway/"]
-RUN dotnet restore "./EdgePulse.Gateway/EdgePulse.Gateway.csproj"
+COPY ["src/EdgePulse.Gateway/EdgePulse.Gateway.csproj", "src/EdgePulse.Gateway/"]
+RUN dotnet restore "./src/EdgePulse.Gateway/EdgePulse.Gateway.csproj"
 COPY . .
-WORKDIR "/src/EdgePulse.Gateway"
+WORKDIR "/src/src/EdgePulse.Gateway"
 RUN dotnet build "./EdgePulse.Gateway.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 # This stage is used to publish the service project to be copied to the final stage
