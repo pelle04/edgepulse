@@ -1,0 +1,27 @@
+services:
+    mosquitto:
+        image: eclipse-mosquitto:2.0
+        ports:
+         - '1883:1883'
+        volumes:
+         - ./mosquitto/config:/mosquitto/config
+
+    simulator:
+        build: 
+            context: .
+            dockerfile: src/EdgePulse.Simulator/Dockerfile
+        depends_on:
+            - mosquitto
+
+    gateway:
+        build:
+            context: .
+            dockerfile: src/EdgePulse.Gateway/Dockerfile
+        depends_on:
+            - simulator
+            - mosquitto
+        volumes:
+         - gateway-data:/data
+
+volumes:
+    gateway-data:
