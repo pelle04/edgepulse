@@ -12,3 +12,4 @@ Naming convention: `NNNN-short-title.md` (e.g. `0001-use-timescaledb.md`).
 
 - [0001 — Bounded `Channel<Reading>` with `BoundedChannelFullMode.Wait`](0001-bounded-channel-backpressure.md)
 - [0002 — Mark a reading forwarded only after IoT Hub acknowledges it](0002-mark-forwarded-after-ack.md)
+- [0003 — Migrate `ReadingRepository` from Dapper to EF Core](0003-dapper-to-ef-core.md)

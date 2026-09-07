@@ -127,11 +127,12 @@ Key trade-offs are documented as ADRs in [`docs/adr/`](docs/adr/). Written so fa
 
 - **ADR-0001** — Bounded `Channel<Reading>` with `BoundedChannelFullMode.Wait` for backpressure
 - **ADR-0002** — Mark a reading forwarded only after IoT Hub acknowledges it (at-least-once delivery)
+- **ADR-0003** — Migrate `ReadingRepository` from Dapper to EF Core
 
 More get added as later phases land — candidates already identified include TimescaleDB vs.
 InfluxDB/Azure Data Explorer, SQLite as edge buffer vs. a local MQTT broker, K3s on edge vs.
-standalone Docker Compose, ML.NET on-edge vs. Azure Cognitive Services, and Dapper vs. EF
-Core. Numbers are assigned in the order ADRs are actually written, not pre-reserved by topic.
+standalone Docker Compose, and ML.NET on-edge vs. Azure Cognitive Services. Numbers are
+assigned in the order ADRs are actually written, not pre-reserved by topic.
 
 ## License
 
