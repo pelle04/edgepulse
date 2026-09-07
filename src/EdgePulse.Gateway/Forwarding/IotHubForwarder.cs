@@ -15,13 +15,19 @@ namespace EdgePulse.Gateway.Forwarding
         private readonly ILogger<IotHubForwarder> _logger;
         private readonly ReadingRepository _repository;
         private readonly IotHubForwarderOptions _options;
-        private readonly Dictionary<string, DeviceClient> _clients = new();
+        private readonly IDeviceClientFactory _deviceClientFactory;
+        private readonly Dictionary<string, IIotHubDeviceClient> _clients = new();
 
-        public IotHubForwarder(ILogger<IotHubForwarder> logger, ReadingRepository repository, IOptions<IotHubForwarderOptions> options)
+        public IotHubForwarder(
+            ILogger<IotHubForwarder> logger,
+            ReadingRepository repository,
+            IOptions<IotHubForwarderOptions> options,
+            IDeviceClientFactory deviceClientFactory)
         {
             _logger = logger;
             _repository = repository;
             _options = options.Value;
+            _deviceClientFactory = deviceClientFactory;
         }
 
         public async Task RunAsync(CancellationToken stoppingToken)
@@ -77,11 +83,11 @@ namespace EdgePulse.Gateway.Forwarding
             }
         }
 
-        private DeviceClient GetOrCreateClient(string deviceId, string connectionString)
+        private IIotHubDeviceClient GetOrCreateClient(string deviceId, string connectionString)
         {
             if (!_clients.TryGetValue(deviceId, out var client))
             {
-                client = DeviceClient.CreateFromConnectionString(connectionString);
+                client = _deviceClientFactory.CreateFromConnectionString(connectionString);
                 _clients[deviceId] = client;
             }
 

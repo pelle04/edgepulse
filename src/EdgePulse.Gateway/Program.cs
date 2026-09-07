@@ -37,6 +37,7 @@ builder.Services.AddSingleton<IDeviceAdapter, MqttAdapter>();
 
 builder.Services.AddSingleton<ReadingRepository>();
 builder.Services.AddSingleton<BufferWriter>();
+builder.Services.AddSingleton<IDeviceClientFactory, DeviceClientFactory>();
 builder.Services.AddSingleton<IotHubForwarder>();
 
 builder.Services.AddHostedService<Worker>();
