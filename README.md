@@ -123,12 +123,15 @@ The simulator will start emitting synthetic telemetry for three asset types (pro
 
 ## Architectural decisions
 
-Key trade-offs are documented as ADRs in [`docs/adr/`](docs/adr/). Highlights:
+Key trade-offs are documented as ADRs in [`docs/adr/`](docs/adr/). Written so far:
 
-- **ADR-001** — TimescaleDB over InfluxDB / Azure Data Explorer
-- **ADR-002** — SQLite as edge buffer instead of a local MQTT broker
-- **ADR-003** — K3s on edge instead of standalone Docker Compose
-- **ADR-004** — ML.NET on-edge instead of Azure Cognitive Services
+- **ADR-0001** — Bounded `Channel<Reading>` with `BoundedChannelFullMode.Wait` for backpressure
+- **ADR-0002** — Mark a reading forwarded only after IoT Hub acknowledges it (at-least-once delivery)
+
+More get added as later phases land — candidates already identified include TimescaleDB vs.
+InfluxDB/Azure Data Explorer, SQLite as edge buffer vs. a local MQTT broker, K3s on edge vs.
+standalone Docker Compose, ML.NET on-edge vs. Azure Cognitive Services, and Dapper vs. EF
+Core. Numbers are assigned in the order ADRs are actually written, not pre-reserved by topic.
 
 ## License
 
