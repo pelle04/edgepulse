@@ -1,61 +1,45 @@
-using Dapper;
 using EdgePulse.Gateway.Models;
-using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Options;
-using System.Globalization;
+using Microsoft.EntityFrameworkCore;
 
 namespace EdgePulse.Gateway.Buffering
 {
     // ForwardedAtUtc is NULL until the Forwarder confirms delivery to IoT Hub —
     // that's the "not forwarded" checkpoint from the wiring diagram.
+    //
+    // ReadingRepository is registered as a singleton and called concurrently from both
+    // BufferWriter and IotHubForwarder (see Worker.ExecuteAsync), so it can't hold a single
+    // shared DbContext — DbContext isn't thread-safe. Instead it asks the factory for a
+    // fresh, short-lived context per call, mirroring the old Dapper code's "new
+    // SqliteConnection per method call" pattern.
     internal class ReadingRepository
     {
-        private readonly string _connectionString;
+        private readonly IDbContextFactory<GatewayDbContext> _dbContextFactory;
 
-        static ReadingRepository()
+        public ReadingRepository(IDbContextFactory<GatewayDbContext> dbContextFactory)
         {
-            // Dapper has no built-in DateTimeOffset <-> TEXT coercion, and SQLite
-            // has no native DateTimeOffset column type — without this handler,
-            // reading rows back throws on the TimestampUtc/ForwardedAtUtc columns.
-            SqlMapper.AddTypeHandler(new DateTimeOffsetHandler());
-        }
-
-        public ReadingRepository(IOptions<BufferWriterOptions> options)
-        {
-            _connectionString = options.Value.ConnectionString;
+            _dbContextFactory = dbContextFactory;
         }
 
         public async Task InitializeAsync(CancellationToken ct)
         {
-            using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(ct);
-
-            const string sql = """
-                CREATE TABLE IF NOT EXISTS Readings (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    DeviceId TEXT NOT NULL,
-                    MetricName TEXT NOT NULL,
-                    Value REAL NOT NULL,
-                    Unit TEXT NOT NULL,
-                    TimestampUtc TEXT NOT NULL,
-                    ForwardedAtUtc TEXT NULL
-                );
-                """;
-
-            await connection.ExecuteAsync(new CommandDefinition(sql, cancellationToken: ct));
+            await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+            await db.Database.EnsureCreatedAsync(ct);
         }
 
         public async Task InsertAsync(Reading reading, CancellationToken ct)
         {
-            using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(ct);
+            await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
-            const string sql = """
-                INSERT INTO Readings (DeviceId, MetricName, Value, Unit, TimestampUtc)
-                VALUES (@DeviceId, @MetricName, @Value, @Unit, @TimestampUtc);
-                """;
+            db.Readings.Add(new ReadingEntity
+            {
+                DeviceId = reading.DeviceId,
+                MetricName = reading.MetricName,
+                Value = reading.Value,
+                Unit = reading.Unit,
+                TimestampUtc = reading.TimestampUtc
+            });
 
-            await connection.ExecuteAsync(new CommandDefinition(sql, reading, cancellationToken: ct));
+            await db.SaveChangesAsync(ct);
         }
 
         // Read side for the Forwarder: rows with ForwardedAtUtc still NULL,
@@ -63,21 +47,22 @@ namespace EdgePulse.Gateway.Buffering
         // cherry-picking the newest readings and starving old ones.
         public async Task<IReadOnlyList<BufferedReading>> GetUnforwardedBatchAsync(int batchSize, CancellationToken ct)
         {
-            using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(ct);
+            await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
-            const string sql = """
-                SELECT Id, DeviceId, MetricName, Value, Unit, TimestampUtc
-                FROM Readings
-                WHERE ForwardedAtUtc IS NULL
-                ORDER BY Id
-                LIMIT @BatchSize;
-                """;
-
-            var rows = await connection.QueryAsync<BufferedReading>(
-                new CommandDefinition(sql, new { BatchSize = batchSize }, cancellationToken: ct));
-
-            return rows.AsList();
+            return await db.Readings
+                .Where(r => r.ForwardedAtUtc == null)
+                .OrderBy(r => r.Id)
+                .Take(batchSize)
+                .Select(r => new BufferedReading
+                {
+                    Id = r.Id,
+                    DeviceId = r.DeviceId,
+                    MetricName = r.MetricName,
+                    Value = r.Value,
+                    Unit = r.Unit,
+                    TimestampUtc = r.TimestampUtc
+                })
+                .ToListAsync(ct);
         }
 
         // Only call this after IoT Hub has actually acknowledged the batch —
@@ -85,17 +70,20 @@ namespace EdgePulse.Gateway.Buffering
         // readings on a crash between "sent" and "marked".
         public async Task MarkForwardedAsync(IEnumerable<long> ids, DateTimeOffset forwardedAtUtc, CancellationToken ct)
         {
-            using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync(ct);
+            var idSet = ids as ICollection<long> ?? ids.ToList();
 
-            const string sql = """
-                UPDATE Readings
-                SET ForwardedAtUtc = @ForwardedAtUtc
-                WHERE Id IN @Ids;
-                """;
+            await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
-            await connection.ExecuteAsync(
-                new CommandDefinition(sql, new { ForwardedAtUtc = forwardedAtUtc, Ids = ids }, cancellationToken: ct));
+            var rows = await db.Readings
+                .Where(r => idSet.Contains(r.Id))
+                .ToListAsync(ct);
+
+            foreach (var row in rows)
+            {
+                row.ForwardedAtUtc = forwardedAtUtc;
+            }
+
+            await db.SaveChangesAsync(ct);
         }
     }
 
@@ -107,15 +95,6 @@ namespace EdgePulse.Gateway.Buffering
         public double Value { get; init; }
         public string Unit { get; init; } = string.Empty;
         public DateTimeOffset TimestampUtc { get; init; }
-    }
-
-    internal class DateTimeOffsetHandler : SqlMapper.TypeHandler<DateTimeOffset>
-    {
-        public override DateTimeOffset Parse(object value) =>
-            DateTimeOffset.Parse((string)value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
-
-        public override void SetValue(System.Data.IDbDataParameter parameter, DateTimeOffset value) =>
-            parameter.Value = value;
     }
 
     internal class BufferWriterOptions

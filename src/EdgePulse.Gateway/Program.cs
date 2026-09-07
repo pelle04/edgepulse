@@ -3,6 +3,8 @@ using EdgePulse.Gateway.Adapters;
 using EdgePulse.Gateway.Buffering;
 using EdgePulse.Gateway.Forwarding;
 using EdgePulse.Gateway.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System.Threading.Channels;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -11,6 +13,15 @@ builder.Services.Configure<ModbusAdapterOptions>(builder.Configuration.GetSectio
 builder.Services.Configure<MqttAdapterOptions>(builder.Configuration.GetSection("MqttAdapter"));
 builder.Services.Configure<BufferWriterOptions>(builder.Configuration.GetSection("BufferWriter"));
 builder.Services.Configure<IotHubForwarder.IotHubForwarderOptions>(builder.Configuration.GetSection("IotHubForwarder"));
+
+// A factory, not a single registered DbContext: ReadingRepository is a singleton used
+// concurrently by BufferWriter and IotHubForwarder, and DbContext instances aren't
+// thread-safe, so each call gets its own short-lived context (see ReadingRepository).
+builder.Services.AddDbContextFactory<GatewayDbContext>((provider, options) =>
+{
+    var bufferWriterOptions = provider.GetRequiredService<IOptions<BufferWriterOptions>>().Value;
+    options.UseSqlite(bufferWriterOptions.ConnectionString);
+});
 
 // Bounded so a stalled downstream consumer applies backpressure to the
 // adapters instead of letting memory grow unbounded.
