@@ -47,7 +47,7 @@ namespace EdgePulse.Gateway.Adapters
                             var reading = new Reading(
                                 DeviceId: _options.DeviceId,
                                 MetricName: register.MetricName,
-                                Value: raw[0] / (double)register.ScaleFactor,
+                                Value: ScaleValue(raw[0], register.ScaleFactor),
                                 Unit: register.Unit,
                                 TimestampUtc: DateTimeOffset.UtcNow);
 
@@ -68,10 +68,15 @@ namespace EdgePulse.Gateway.Adapters
                     try { await Task.Delay(backoff, stoppingToken); }
                     catch (OperationCanceledException) { break; }
 
-                    backoff = TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, maxBackoff.TotalSeconds));
+                    backoff = NextBackoff(backoff, maxBackoff);
                 }
             }
         }
+
+        internal static double ScaleValue(ushort raw, int scaleFactor) => raw / (double)scaleFactor;
+
+        internal static TimeSpan NextBackoff(TimeSpan current, TimeSpan max) =>
+            TimeSpan.FromSeconds(Math.Min(current.TotalSeconds * 2, max.TotalSeconds));
     }
 
     internal class RegisterMapping

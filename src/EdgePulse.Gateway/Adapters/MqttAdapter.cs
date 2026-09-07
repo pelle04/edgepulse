@@ -1,5 +1,4 @@
 using EdgePulse.Gateway.Models;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Client;
@@ -95,7 +94,7 @@ namespace EdgePulse.Gateway.Adapters
             await output.WriteAsync(reading, stoppingToken);
         }
 
-        private static string InferMetricName(string unit) => unit switch
+        public static string InferMetricName(string unit) => unit switch
         {
             "%RH" => "humidity",
             "C" => "temperature",
