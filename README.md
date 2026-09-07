@@ -33,12 +33,14 @@ moving to the next one.
 ┌─────────────┐    ┌─────────────────────────────┐    ┌─────────────────────────┐    ┌─────────┐
 │   FIELD     │    │           EDGE              │    │         CLOUD           │    │ CLIENT  │
 │             │    │   (Raspberry Pi / Industrial │    │         (Azure)         │    │         │
-│ PLCs        │───▶│            PC)              │───▶│ IoT Hub                 │───▶│ React   │
+│ PLCs        │───▶│            PC)              │───▶│ IoT Hub                 │───▶│ Angular │
 │ Thermal cam │    │                             │    │   ▼                     │    │ Dash    │
 │ MQTT sensors│    │ Adapters ▶ Gateway          │    │ Functions ▶ TimescaleDB │    │         │
 │ Simulator   │    │     ▶ Anomaly Engine        │    │        ▶ Blob (cold)   │    │ REST    │
 │             │    │     ▶ SQLite buffer         │    │   ▶ API (AKS, Entra ID)│    │ Webhook │
 │             │    │                             │    │   ▶ SignalR Hub         │    │         │
+│             │    │                             │    │ API ─Service Bus─▶      │    │         │
+│             │    │                             │    │     Insights (OpenAI)   │    │         │
 └─────────────┘    └─────────────────────────────┘    └─────────────────────────┘    └─────────┘
                                 offline-first             AMQP/MQTT over TLS
                                                     Monitor/Log Analytics + Backup across all of it
@@ -50,12 +52,24 @@ Three design principles drive every choice:
 - **Protocol-agnostic** — every data source implements `IDeviceAdapter`. Adding a new protocol does not touch the gateway.
 - **Cloud-agnostic core** — the edge layer has zero hard Azure dependency. It can run fully on-premise. Azure is the default, not a requirement.
 
+## Architecture style
+
+EdgePulse is a set of independently deployable services, not a monolith — edge (`Simulator`,
+`Edge.Gateway`, `Edge.AnomalyEngine`) and cloud (`Cloud.Api`, `Cloud.Functions`,
+`Cloud.Insights`, `Dashboard`), each with its own deploy target and, from Phase 4, its own
+Helm chart on AKS. Inter-service communication follows the shape that fits each edge, not one
+default: IoT Hub (device→cloud telemetry ingestion), Azure Functions (event-triggered
+routing), one Azure Service Bus topic for async pub/sub between `Cloud.Api` and
+`Cloud.Insights` (`AlertRaised` → `InsightGenerated`), and HTTP/SignalR only where a client
+needs a synchronous request or a live push. See [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md) for
+the reasoning and scope caps on the async-messaging piece.
+
 ## Tech stack
 
 | Layer       | Stack                                                                       |
 |-------------|-----------------------------------------------------------------------------|
 | Edge        | ASP.NET Core 8, Worker Services, ML.NET, SQLite, Dapper                     |
-| Cloud       | Azure IoT Hub, Azure Functions, AKS, PostgreSQL + TimescaleDB, Blob Storage (cold archive), Key Vault |
+| Cloud       | Azure IoT Hub, Azure Functions, Azure Service Bus (async pub/sub), AKS, PostgreSQL + TimescaleDB, Blob Storage (cold archive), Key Vault |
 | Identity & governance | Microsoft Entra ID (app registrations, RBAC), Azure Policy, Cost Management |
 | Frontend    | Angular 18+ (standalone components, signals), SignalR client                |
 | DevOps      | Docker, Helm, K3s (+ throwaway kubeadm lab), Terraform IaC (+ one Bicep exercise), GitHub Actions, Azure DevOps Pipelines/Boards, Argo CD (GitOps), Trivy |
@@ -68,7 +82,7 @@ EdgePulse is built in four shippable phases — each one produces something demo
 | Phase | Goal                          | Deliverables                                                                                  | Status     |
 |-------|-------------------------------|-----------------------------------------------------------------------------------------------|------------|
 | **1** | Data reaches the cloud        | Device Simulator, `IDeviceAdapter`, Modbus + MQTT adapters, Worker loop, SQLite buffer, IoT Hub forward, local Docker Compose | 🟡 In progress |
-| **2** | Data is queryable and the cloud is governed | Azure Function routing, TimescaleDB schema, Blob cold archive, Backend API (Entra ID-secured), AKS deploy, Helm chart, Terraform base, Azure governance (RBAC/Policy/Cost), Monitor + backup/restore drill | ⚪ Planned  |
+| **2** | Data is queryable and the cloud is governed | Azure Function routing, TimescaleDB schema, Blob cold archive, Backend API (Entra ID-secured), Cloud.Insights (Azure OpenAI alert explanations) with async pub/sub to the API via Service Bus, AKS deploy, Helm chart, Terraform base, Azure governance (RBAC/Policy/Cost), Monitor + backup/restore drill | ⚪ Planned  |
 | **3** | The system is intelligent     | Anomaly Engine (rules + ML.NET), SignalR real-time, alert webhook/email, Angular dashboard     | ⚪ Planned  |
 | **4** | The system is shippable       | Full Terraform IaC (+ one Bicep exercise), GitHub Actions + Azure DevOps Pipelines/Boards, Argo CD GitOps sync, multi-tenant isolation, self-managed K8s cluster admin drills, ADRs, security scanning, live demo deployment + walkthrough video | ⚪ Planned  |
 
