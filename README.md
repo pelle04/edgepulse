@@ -3,7 +3,7 @@
 > Open-source platform for industrial asset monitoring and anomaly detection. Collects telemetry from PLCs, sensors and thermal cameras, processes it at the edge with offline resilience, and syncs to Azure for dashboards, alerting and historical analysis.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-WIP%20%E2%80%94%20Phase%201-orange.svg)](#roadmap)
+[![Status](https://img.shields.io/badge/status-Phase%201%20done%2C%20Phase%202%20next-brightgreen.svg)](#roadmap)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4.svg)](https://dotnet.microsoft.com/)
 [![Azure](https://img.shields.io/badge/Azure-IoT%20Hub%20%7C%20AKS-0078D4.svg)](https://azure.microsoft.com/)
 
@@ -68,7 +68,7 @@ the reasoning and scope caps on the async-messaging piece.
 
 | Layer       | Stack                                                                       |
 |-------------|-----------------------------------------------------------------------------|
-| Edge        | ASP.NET Core 8, Worker Services, ML.NET, SQLite, Dapper                     |
+| Edge        | ASP.NET Core 8, Worker Services, ML.NET, SQLite, EF Core                    |
 | Cloud       | Azure IoT Hub, Azure Functions, Azure Service Bus (async pub/sub), AKS, PostgreSQL + TimescaleDB, Blob Storage (cold archive), Key Vault |
 | Identity & governance | Microsoft Entra ID (app registrations, RBAC), Azure Policy, Cost Management |
 | Frontend    | Angular 18+ (standalone components, signals), SignalR client                |
@@ -81,7 +81,7 @@ EdgePulse is built in four shippable phases — each one produces something demo
 
 | Phase | Goal                          | Deliverables                                                                                  | Status     |
 |-------|-------------------------------|-----------------------------------------------------------------------------------------------|------------|
-| **1** | Data reaches the cloud        | Device Simulator, `IDeviceAdapter`, Modbus + MQTT adapters, Worker loop, SQLite buffer, IoT Hub forward, local Docker Compose | 🟡 In progress |
+| **1** | Data reaches the cloud        | Device Simulator, `IDeviceAdapter`, Modbus + MQTT adapters, Worker loop, SQLite buffer, IoT Hub forward, local Docker Compose | 🟢 Done — verified end-to-end via `docker-compose up` |
 | **2** | Data is queryable and the cloud is governed | Azure Function routing, TimescaleDB schema, Blob cold archive, Backend API (Entra ID-secured), Cloud.Insights (Azure OpenAI alert explanations) with async pub/sub to the API via Service Bus, AKS deploy, Helm chart, Terraform base, Azure governance (RBAC/Policy/Cost), Monitor + backup/restore drill | ⚪ Planned  |
 | **3** | The system is intelligent     | Anomaly Engine (rules + ML.NET), SignalR real-time, alert webhook/email, Angular dashboard     | ⚪ Planned  |
 | **4** | The system is shippable       | Full Terraform IaC (+ one Bicep exercise), GitHub Actions + Azure DevOps Pipelines/Boards, Argo CD GitOps sync, multi-tenant isolation, self-managed K8s cluster admin drills, ADRs, security scanning, live demo deployment + walkthrough video | ⚪ Planned  |
@@ -92,34 +92,49 @@ EdgePulse is built in four shippable phases — each one produces something demo
 edgepulse/
 ├── src/
 │   ├── EdgePulse.Simulator/          ← start here, day 1
-│   ├── EdgePulse.Edge.Gateway/       ← Worker Service + adapters
-│   ├── EdgePulse.Edge.AnomalyEngine/ ← rules + ML.NET
-│   ├── EdgePulse.Cloud.Api/          ← ASP.NET Core API + SignalR
-│   ├── EdgePulse.Cloud.Functions/    ← Azure Functions
-│   └── EdgePulse.Dashboard/          ← Angular app
-├── infra/                            ← Bicep templates
-├── k8s/                              ← Helm charts
-├── edge-deployment/                  ← IoT Edge manifest + docker-compose
+│   ├── EdgePulse.Gateway/            ← Worker Service + adapters + IoT Hub forwarding
+│   ├── EdgePulse.Edge.AnomalyEngine/ ← rules + ML.NET (Phase 3)
+│   ├── EdgePulse.Cloud.Api/          ← ASP.NET Core API + SignalR (Phase 2)
+│   ├── EdgePulse.Cloud.Functions/    ← Azure Functions (Phase 2)
+│   └── EdgePulse.Dashboard/          ← Angular app (Phase 3)
+├── tests/
+│   └── EdgePulse.Gateway.Tests/      ← adapter, buffering, forwarder unit tests
+├── mosquitto/config/                 ← local MQTT broker config for docker-compose
+├── docker-compose.yml                ← local dev stack: mosquitto + simulator + gateway
+├── infra/                            ← Terraform + Bicep templates (Phase 2)
+├── k8s/                              ← Helm charts (Phase 2+)
 ├── docs/
 │   └── adr/                          ← Architecture Decision Records
-└── .github/workflows/                ← CI/CD pipelines
+└── .github/workflows/                ← CI/CD pipelines (Phase 4)
 ```
 
 ## Quickstart (local dev)
 
-> Phase 1 is in active development. Right now only the simulator is runnable.
-
 **Prerequisites:** .NET 8 SDK, Docker Desktop, Git.
+
+Run the full edge stack (Mosquitto broker + Simulator + Gateway) with Docker Compose:
 
 ```bash
 git clone https://github.com/<your-user>/edgepulse.git
 cd edgepulse
 
-# Run the device simulator
+docker-compose up --build
+```
+
+This brings up Mosquitto, the Simulator, and the Gateway; the Gateway buffers readings to
+SQLite and attempts to forward them to Azure IoT Hub (expected to fail/retry until IoT Hub is
+provisioned in Phase 2).
+
+Or run just the simulator directly with `dotnet`:
+
+```bash
 dotnet run --project src/EdgePulse.Simulator
 ```
 
-The simulator will start emitting synthetic telemetry for three asset types (production line, electric motor, thermal camera) at 1 Hz, with controlled anomaly injection every N minutes.
+The simulator emits synthetic telemetry (a simulated PLC over Modbus TCP, a humidity sensor
+over MQTT) that the Gateway picks up, buffers to SQLite, and forwards to Azure IoT Hub once
+a connection string is configured (`IotHubForwarder` in `appsettings.json` — IoT Hub itself
+is provisioned in Phase 2/Terraform, not required for local dev).
 
 ## Architectural decisions
 
